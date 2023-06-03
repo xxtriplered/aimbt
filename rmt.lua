@@ -1,196 +1,193 @@
--- -----------------------------------
---  ___      _   _   _              --
--- / __| ___| |_| |_(_)_ _  __ _ ___--
--- \__ \/ -_)  _|  _| | ' \/ _` (_-<--
--- |___/\___|\__|\__|_|_||_\__, /__/--
---                         |___/    --
--- -----------------------------------
--- -----------------------------------
-ALLYCOLOR = {0, 255, 255}     -- Color of the ESP of people on the same team
-ENEMYCOLOR = {255, 0, 0}     -- Color of the ESP of people NOT on the same team
-TRANSPARENCY = 0.5          -- Transparency of the ESP
-HEALTHBAR_ACTIVATED = true  -- Renders the Healthbar
+local Camera = workspace.CurrentCamera
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
+local Holding = false
 
--- Aimbot Variables
-local aimbotEnabled = true -- Set this to enable or disable the aimbot
-local aimbotTeamCheck = true -- Set this to enable or disable checking for teammates
-local aimbotKey = Enum.KeyCode.V -- The key that activates the aimbot
+_G.AimbotEnabled = true
+_G.TeamCheck = true -- If set to true then the script would only lock your aim at enemy team members.
+_G.AimPart = "Head" -- Where the aimbot script would lock at.
+_G.Sensitivity = 0 -- How many seconds it takes for the aimbot script to officially lock onto the target's aimpart.
 
--- -----------------------------------
+_G.CircleSides = 64 -- How many sides the FOV circle would have.
+_G.CircleColor = Color3.fromRGB(255, 255, 255) -- (RGB) Color that the FOV circle would appear as.
+_G.CircleTransparency = 0.7 -- Transparency of the circle.
+_G.CircleRadius = 80 -- The radius of the circle / FOV.
+_G.CircleFilled = false -- Determines whether or not the circle is filled.
+_G.CircleVisible = true -- Determines whether or not the circle is visible.
+_G.CircleThickness = 0 -- The thickness of the circle.
 
-function createFlex()
-    -- -----------------------------------------------------------------------------------
-    -- [VARIABLES] // Changing may result in Errors!
-    players = game:GetService("Players") -- Required for PF
-    faces = {"Front", "Back", "Bottom", "Left", "Right", "Top"} -- Every possible Enum face
-    currentPlayer = nil -- Used for the Team-Check
-    lplayer = players.LocalPlayer -- The LocalPlayer
-    -- -----------------------------------------------------------------------------------
-    players.PlayerAdded:Connect(function(p)
-        currentPlayer = p
-        p.CharacterAdded:Connect(function(character) -- For when a new Player joins the game
-            createESP(character)
-        end)
-    end)
-    -- -----------------------------------------------------------------------------------
-    function checkPart(obj)
-        if (obj:IsA("Part") or obj:IsA("MeshPart")) and obj.Name ~= "HumanoidRootPart" then
-            return true
-        end
-    end
-    -- -----------------------------------------------------------------------------------
-    function actualESP(obj)
-        local box = Instance.new("BoxHandleAdornment")
-        box.Size = obj.Size + Vector3.new(0.1, 0.1, 0.1)
-        box.Transparency = TRANSPARENCY
-        box.Adornee = obj
-        box.AlwaysOnTop = true
-        if currentPlayer.Team == players.LocalPlayer.Team then
-            box.Color3 = Color3.new(ALLYCOLOR[1], ALLYCOLOR[2], ALLYCOLOR[3])
-        else
-            box.Color3 = Color3.new(ENEMYCOLOR[1], ENEMYCOLOR[2], ENEMYCOLOR[3])
-        end
-        box.Parent = obj
+local FOVCircle = Drawing.new("Circle")
+FOVCircle.Position = Vector2.new(Camera.ViewportSize.X / 2, Camera.ViewportSize.Y / 2)
+FOVCircle.Radius = _G.CircleRadius
+FOVCircle.Filled = _G.CircleFilled
+FOVCircle.Color = _G.CircleColor
+FOVCircle.Visible = _G.CircleVisible
+FOVCircle.Radius = _G.CircleRadius
+FOVCircle.Transparency = _G.CircleTransparency
+FOVCircle.NumSides = _G.CircleSides
+FOVCircle.Thickness = _G.CircleThickness
 
-        for i = 0, 5 do
-            surface = Instance.new("SurfaceGui", obj) -- Creates the SurfaceGui
-            surface.Face = Enum.NormalId[faces[i + 1]] -- Adjusts the Face and chooses from the face table
-            surface.AlwaysOnTop = true
+local function GetClosestPlayer()
+    local MaximumDistance = _G.CircleRadius
+    local Target = nil
 
-            frame = Instance.new("Frame", surface) -- Creates the viewable Frame
-            frame.Size = UDim2.new(1, 0, 1, 0)
-            frame.BorderSizePixel = 0
-            frame.BackgroundTransparency = TRANSPARENCY
-            if currentPlayer.Team == players.LocalPlayer.Team then -- Checks the Players Team
-                frame.BackgroundColor3 = Color3.new(ALLYCOLOR[1], ALLYCOLOR[2], ALLYCOLOR[3]) -- If in the same Team
+    for _, v in next, Players:GetPlayers() do
+        if v.Name ~= LocalPlayer.Name then
+            if _G.TeamCheck == true then
+                if v.Team ~= LocalPlayer.Team then
+                    if v.Character ~= nil then
+                        if v.Character:FindFirstChild("HumanoidRootPart") ~= nil then
+                            if v.Character:FindFirstChild("Humanoid") ~= nil and v.Character:FindFirstChild("Humanoid").Health ~= 0 then
+                                local ScreenPoint = Camera:WorldToScreenPoint(v.Character:WaitForChild("HumanoidRootPart", math.huge).Position)
+                                local VectorDistance = (Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y) - Vector2.new(ScreenPoint.X, ScreenPoint.Y)).Magnitude
+
+                                if VectorDistance < MaximumDistance then
+                                    Target = v
+                                end
+                            end
+                        end
+                    end
+                end
             else
-                frame.BackgroundColor3 = Color3.new(ENEMYCOLOR[1], ENEMYCOLOR[2], ENEMYCOLOR[3]) -- If not in the same Team
-            end
-        end
+                if v.Character ~= nil then
+                    if v.Character:FindFirstChild("HumanoidRootPart") ~= nil then
+                        if v.Character:FindFirstChild("Humanoid") ~= nil and v.Character:FindFirstChild("Humanoid").Health ~= 0 then
+                            local ScreenPoint = Camera:WorldToScreenPoint(v.Character:WaitForChild("HumanoidRootPart", math.huge).Position)
+                            local VectorDistance = (Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y) - Vector2.new(ScreenPoint.X, ScreenPoint.Y)).Magnitude
 
-        if HEALTHBAR_ACTIVATED then
-            local humanoid = obj.Parent:FindFirstChild("Humanoid")
-            if humanoid then
-                local healthbar = Instance.new("BillboardGui")
-                healthbar.Size = UDim2.new(3, 0, 0.2, 0)
-                healthbar.Adornee = obj
-                healthbar.Parent = obj.Parent
-
-                local healthframe = Instance.new("Frame")
-                healthframe.Size = UDim2.new(humanoid.Health / humanoid.MaxHealth, 0, 1, 0)
-                healthframe.BackgroundColor3 = Color3.new(0, 1, 0)
-                healthframe.Parent = healthbar
-
-                humanoid.HealthChanged:Connect(function()
-                    healthframe.Size = UDim2.new(humanoid.Health / humanoid.MaxHealth, 0, 1, 0)
-                end)
-            end
-        end
-    end
-    -- -----------------------------------------------------------------------------------
-    function createESP(character)
-        if aimbotEnabled and aimbotTeamCheck and character:FindFirstChild("Humanoid") and currentPlayer.Team == players.LocalPlayer.Team then
-            return
-        end
-
-        if character:FindFirstChild("Head") then -- Checks if there is a Head
-            actualESP(character.Head) -- Runs the actual function
-        end
-
-        for _, obj in pairs(character:GetChildren()) do
-            if checkPart(obj) then
-                actualESP(obj)
-            elseif obj:IsA("Folder") or obj:IsA("Accoutrement") then
-                for _, obj2 in pairs(obj:GetDescendants()) do
-                    if checkPart(obj2) then
-                        actualESP(obj2)
+                            if VectorDistance < MaximumDistance then
+                                Target = v
+                            end
+                        end
                     end
                 end
             end
         end
     end
-    -- -----------------------------------------------------------------------------------
-    for _, plr in pairs(players:GetPlayers()) do -- Gets all Players in the Game
-        currentPlayer = plr
-        if plr.Character then -- Finds their Character
-            createESP(plr.Character)
-        end
-        plr.CharacterAdded:Connect(function(char) -- For when a new Player joins the game
-            createESP(char)
-        end)
-    end
+
+    return Target
 end
 
--- Create ESP
-createFlex()
-
--- Aimbot
-local mousemoverel = function(x, y)
-    mousemoverel(x, y)
-end
-
-assert(mousemoverel, "missing dependency: mousemoverel")
-
--- Services
-local inputService = game:GetService("UserInputService")
-local runService = game:GetService("RunService")
-local players = game:GetService("Players")
-local workspace = game:GetService("Workspace")
-
--- Variables
-local camera = workspace.CurrentCamera
-local wtvp = camera.WorldToViewportPoint
-local localPlayer = players.LocalPlayer
-local mousePos = inputService.GetMouseLocation
-local isPressed = inputService.IsMouseButtonPressed
-local curve = { player = nil, i = 0 }
-
--- Locals
-local newVector2 = Vector2.new
-local clamp = math.clamp
-
--- Functions
-local function getClosest()
-    local closest, player, position = math.huge, nil, nil
-    for _, p in next, players:GetPlayers() do
-        local character = p.Character
-        if character and p.Team ~= localPlayer.Team then
-            local pos, visible = wtvp(camera, character.Head.Position)
-            pos = newVector2(pos.X, pos.Y)
-
-            local magnitude = (pos - mousePos(inputService)).Magnitude
-            if magnitude < closest and visible then
-                closest = magnitude
-                player = p
-                position = pos
-            end
-        end
-    end
-    return player, position
-end
-
-local function quadBezier(t, p0, p1, o0)
-    return (1 - t)^2 * p0 + 2 * (1 - t) * t * (p0 + (p1 - p0) * o0) + t^2 * p1
-end
-
--- Connections
-runService.Heartbeat:Connect(function(deltaTime)
-    if aimbotEnabled and isPressed(inputService, aimbotKey) then
-        local player, screen = getClosest()
-        if player and screen then
-            if curve.player ~= player then
-                curve.player = player
-                curve.i = 0
-            end
-
-            local mouse = mousePos(inputService)
-            local delta = quadBezier(curve.i, mouse, screen, newVector2(0.5, 0)) - mouse
-            mousemoverel(delta.X, delta.Y)
-
-            curve.i = clamp(curve.i + deltaTime * 1.5, 0, 1)
-        end
-    else
-        curve.player = nil
-        curve.i = 0
+UserInputService.InputBegan:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton2 then
+        Holding = true
     end
 end)
+
+UserInputService.InputEnded:Connect(function(Input)
+    if Input.UserInputType == Enum.UserInputType.MouseButton2 then
+        Holding = false
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    FOVCircle.Position = Vector2.new(UserInputService:GetMouseLocation().X, UserInputService:GetMouseLocation().Y)
+    FOVCircle.Radius = _G.CircleRadius
+    FOVCircle.Filled = _G.CircleFilled
+    FOVCircle.Color = _G.CircleColor
+    FOVCircle.Visible = _G.CircleVisible
+    FOVCircle.Radius = _G.CircleRadius
+    FOVCircle.Transparency = _G.CircleTransparency
+    FOVCircle.NumSides = _G.CircleSides
+    FOVCircle.Thickness = _G.CircleThickness
+
+    if Holding == true and _G.AimbotEnabled == true then
+        TweenService:Create(Camera, TweenInfo.new(_G.Sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out), {CFrame = CFrame.new(Camera.CFrame.Position, GetClosestPlayer().Character[_G.AimPart].Position)}):Play()
+    end
+end)
+
+local Esp = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/x114/RobloxScripts/main/OpenSourceEsp"))()
+-- Boxes --
+Esp.Box = true
+Esp.BoxColor = Color3.fromRGB(255, 255, 255)
+Esp.BoxOutline = true
+Esp.BoxOutlineColor = Color3.fromRGB(0, 0, 0)
+-- HealthBars --
+Esp.HealthBar = true
+Esp.HealthBarSide = "Left" -- Left,Bottom,Right
+-- Names --
+Esp.Names = true
+Esp.NamesColor = Color3.fromRGB(255, 255, 255)
+Esp.NamesOutline = true
+Esp.NamesFont = 2
+Esp.NamesSize = 13
+
+local Theme = require(PATH_TO_CUSTOM_THEME) -- Replace PATH_TO_CUSTOM_THEME with the actual path to your custom theme script
+
+-- Create the GUI
+local GuiService = game:GetService("GuiService")
+local CoreGui = game:GetService("CoreGui")
+
+local RobloxGui = CoreGui:WaitForChild("RobloxGui")
+local Finity = require(RobloxGui:WaitForChild("Modules"):WaitForChild("Finity"))
+local FinityWindow = Finity.new(false, Theme.CustomThemes.Example)
+
+-- Aimbot section
+local AimbotSection = FinityWindow:Category("Aimbot")
+AimbotSection:Toggle("Enable Aimbot", _G.AimbotEnabled, function(enabled)
+    _G.AimbotEnabled = enabled
+end)
+
+AimbotSection:Toggle("Team Check", _G.TeamCheck, function(enabled)
+    _G.TeamCheck = enabled
+end)
+
+AimbotSection:Dropdown("Aim Part", {"Head", "UpperTorso", "LowerTorso"}, function(selected)
+    _G.AimPart = selected
+end)
+
+AimbotSection:Slider("Sensitivity", 0, 2, _G.Sensitivity, function(value)
+    _G.Sensitivity = value
+end)
+
+-- ESP section
+local EspSection = FinityWindow:Category("ESP")
+EspSection:Toggle("Enable ESP", Esp.Enabled, function(enabled)
+    Esp.Enabled = enabled
+end)
+
+EspSection:ColorPicker("Box Color", Esp.BoxColor, function(color)
+    Esp.BoxColor = color
+end)
+
+EspSection:Toggle("Box Outline", Esp.BoxOutline, function(enabled)
+    Esp.BoxOutline = enabled
+end)
+
+EspSection:ColorPicker("Box Outline Color", Esp.BoxOutlineColor, function(color)
+    Esp.BoxOutlineColor = color
+end)
+
+EspSection:Toggle("Health Bar", Esp.HealthBar, function(enabled)
+    Esp.HealthBar = enabled
+end)
+
+EspSection:Dropdown("Health Bar Side", {"Left", "Bottom", "Right"}, function(selected)
+    Esp.HealthBarSide = selected
+end)
+
+EspSection:Toggle("Names", Esp.Names, function(enabled)
+    Esp.Names = enabled
+end)
+
+EspSection:ColorPicker("Names Color", Esp.NamesColor, function(color)
+    Esp.NamesColor = color
+end)
+
+EspSection:Toggle("Names Outline", Esp.NamesOutline, function(enabled)
+    Esp.NamesOutline = enabled
+end)
+
+EspSection:Slider("Names Size", 8, 20, Esp.NamesSize, function(value)
+    Esp.NamesSize = value
+end)
+
+EspSection:Dropdown("Names Font", {"Arial", "SourceSans", "SourceSansBold", "SourceSansItalic", "SourceSansBoldItalic", "Bodoni"}, function(selected)
+    Esp.NamesFont = selected
+end)
+
+-- Show the GUI
+FinityWindow:BindToHotkey(Enum.KeyCode.Insert)
